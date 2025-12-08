@@ -3,11 +3,12 @@ Performance Dashboard UI - Black & Orange Futuristic Theme
 Layout:
   Row 1: Disk (left) | Memory (right)
   Row 2: GPU Memory (left) | GPU Usage (right)
-  Row 3: CPU Usage (full width)
+  Row 3: CPU Usage (left) | Network (right)
 Includes:
   - 12px rounded cards
   - Matte dark background
   - Orange line with soft fill glow
+  - Network graph with dual lines (send/receive)
 """
 
 import tkinter as tk
@@ -20,6 +21,8 @@ BACKGROUND_DARK = "#0E0E12"
 CARD_BG = "#1B1B24"
 ACCENT_ORANGE = "#FF6B00"
 ACCENT_ORANGE_LIGHT = "#FF8C32"
+ACCENT_GREEN = "#00FF88"
+ACCENT_BLUE = "#00A8FF"
 TEXT_PRIMARY = "#F5F5F5"
 TEXT_MUTED = "#8B8B94"
 
@@ -141,6 +144,11 @@ class PerformanceUI:
     def build_graph_cards(self, parent):
         # slightly larger figs so charts fill cards nicely
         fig_w, fig_h = 5.6, 2.6
+        
+        # Get GPU type for labels
+        gpu_type = self.monitor.gpu_type.upper()
+        gpu_label = f"GPU Usage ({gpu_type})" if gpu_type != "NONE" else "GPU Usage (Not Detected)"
+        gpu_mem_label = f"GPU Memory ({gpu_type})" if gpu_type != "NONE" else "GPU Memory (Not Detected)"
 
         # Row 1: Disk (left) | Memory (right)
         disk_frame = self.create_card(parent, "Disk Usage", 0, 0)
@@ -160,7 +168,7 @@ class PerformanceUI:
         self.mem_canvas.get_tk_widget().pack(fill="both", expand=True)
 
         # Row 2: GPU Memory (left) | GPU Usage (right)
-        gpumem_frame = self.create_card(parent, "GPU Memory", 1, 0)
+        gpumem_frame = self.create_card(parent, gpu_mem_label, 1, 0)
         self.gpu_mem_fig = self.Figure(figsize=(fig_w, fig_h), dpi=90)
         self._style_figure(self.gpu_mem_fig)
         self.gpu_mem_ax = self.gpu_mem_fig.add_subplot(111)
@@ -168,7 +176,7 @@ class PerformanceUI:
         self.gpu_mem_canvas = self.FigureCanvasTkAgg(self.gpu_mem_fig, gpumem_frame)
         self.gpu_mem_canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        gpu_frame = self.create_card(parent, "GPU Usage", 1, 1)
+        gpu_frame = self.create_card(parent, gpu_label, 1, 1)
         self.gpu_fig = self.Figure(figsize=(fig_w, fig_h), dpi=90)
         self._style_figure(self.gpu_fig)
         self.gpu_ax = self.gpu_fig.add_subplot(111)
@@ -176,14 +184,23 @@ class PerformanceUI:
         self.gpu_canvas = self.FigureCanvasTkAgg(self.gpu_fig, gpu_frame)
         self.gpu_canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        # Row 3: CPU Usage (full width)
-        cpu_frame = self.create_card(parent, "CPU Usage", 2, 0, colspan=2)
-        self.cpu_fig = self.Figure(figsize=(fig_w * 2, fig_h), dpi=90)
+        # Row 3: CPU Usage (left) | Network (right)
+        cpu_frame = self.create_card(parent, "CPU Usage", 2, 0)
+        self.cpu_fig = self.Figure(figsize=(fig_w, fig_h), dpi=90)
         self._style_figure(self.cpu_fig)
         self.cpu_ax = self.cpu_fig.add_subplot(111)
         self._style_axis(self.cpu_ax)
         self.cpu_canvas = self.FigureCanvasTkAgg(self.cpu_fig, cpu_frame)
         self.cpu_canvas.get_tk_widget().pack(fill="both", expand=True)
+
+        # Network graph with dual lines
+        network_frame = self.create_card(parent, "Network Usage", 2, 1)
+        self.network_fig = self.Figure(figsize=(fig_w, fig_h), dpi=90)
+        self._style_figure(self.network_fig)
+        self.network_ax = self.network_fig.add_subplot(111)
+        self._style_axis_network(self.network_ax)
+        self.network_canvas = self.FigureCanvasTkAgg(self.network_fig, network_frame)
+        self.network_canvas.get_tk_widget().pack(fill="both", expand=True)
 
     # ---------------- STYLING ----------------
 
@@ -201,6 +218,17 @@ class PerformanceUI:
         ax.set_ylim(0, 100)
         ax.set_xlim(0, 60)
         ax.set_ylabel("%", color=TEXT_MUTED)
+
+    def _style_axis_network(self, ax):
+        """Special styling for network axis (MB/s instead of %)"""
+        ax.set_facecolor(CARD_BG)
+        ax.tick_params(colors=TEXT_MUTED, labelsize=9)
+        for spine in ax.spines.values():
+            spine.set_color("#33333F")
+        ax.grid(True, color="#2A2A35", alpha=0.35)
+        ax.set_ylim(0, 10)  # Dynamic scaling will adjust this
+        ax.set_xlim(0, 60)
+        ax.set_ylabel("MB/s", color=TEXT_MUTED)
 
     # ---------------- UPDATE GRAPHS ----------------
 
@@ -235,6 +263,61 @@ class PerformanceUI:
             linewidth=2.4,
         )
 
+    def _draw_dual_network_lines(self, ax, send_values, recv_values):
+        """Draw network graph with send (solid) and receive (dashed) lines"""
+        x = list(range(len(send_values)))
+        ax.clear()
+        self._style_axis_network(ax)
+        
+        # Dynamic Y-axis scaling based on max value
+        max_val = max(max(send_values or [0]), max(recv_values or [0]))
+        if max_val < 1:
+            ax.set_ylim(0, 1)
+        elif max_val < 10:
+            ax.set_ylim(0, 10)
+        elif max_val < 50:
+            ax.set_ylim(0, 50)
+        else:
+            ax.set_ylim(0, max_val * 1.2)
+
+        # SEND line (solid green)
+        ax.fill_between(
+            x,
+            send_values,
+            [0] * len(send_values),
+            color=ACCENT_GREEN,
+            alpha=0.15,
+        )
+        ax.plot(
+            x,
+            send_values,
+            color=ACCENT_GREEN,
+            linewidth=2.4,
+            linestyle='-',
+            label='Send'
+        )
+
+        # RECEIVE line (dashed blue)
+        ax.fill_between(
+            x,
+            recv_values,
+            [0] * len(recv_values),
+            color=ACCENT_BLUE,
+            alpha=0.15,
+        )
+        ax.plot(
+            x,
+            recv_values,
+            color=ACCENT_BLUE,
+            linewidth=2.4,
+            linestyle='--',
+            label='Receive'
+        )
+        
+        # Add legend
+        ax.legend(loc='upper left', fontsize=8, framealpha=0.3, 
+                 facecolor=CARD_BG, edgecolor='#33333F', labelcolor=TEXT_MUTED)
+
     def update_graphs(self):
         data = self.monitor.get_all_data()
 
@@ -252,6 +335,14 @@ class PerformanceUI:
 
         self._draw_orange_series(self.cpu_ax, data["cpu"])
         self.cpu_canvas.draw()
+
+        # Network graph with dual lines
+        self._draw_dual_network_lines(
+            self.network_ax, 
+            data["network_send"], 
+            data["network_recv"]
+        )
+        self.network_canvas.draw()
 
     # ---------------- UPDATE LOOP ----------------
 
