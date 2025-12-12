@@ -1,814 +1,261 @@
-"""
-UI for process management
-"""
+# modules/processes/ui.py
+import os
+import threading
+import time
+import getpass
+import psutil
+import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
-from modules.processes.backend import ProcessManager
-from modules.utils.helpers import check_psutil
+
+REFRESH_INTERVAL = 0.25
+
+# THEME A COLORS
+BG_MAIN = "#0f0e0f"        # Main background
+CARD_BG = "#1a1a1c"        # Outer card
+INNER_BG = "#141416"       # Inner table background
+TEXT_PRIMARY = "#ffffff"
+ROW_ODD = "#121212"
+ROW_EVEN = "#151515"
+NEON_ACCENT = "#ff8a2b"    # Neon orange strip
+NEON_LIME = "#8CFF3E"   # Neon lime for suspend
+
+CORNER = 12
 
 
-class ProcessesUI:
-    def __init__(self, parent):
+def fmt(x, precision=1):
+    try:
+        return f"{x:.{precision}f}"
+    except:
+        return "0.0"
+
+
+class ProcessesUI(ctk.CTkFrame):
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, fg_color=BG_MAIN)
         self.parent = parent
-        self.manager = ProcessManager()
-        self.update_running = False
-        self.update_job = None
-        self.search_var = tk.StringVar()
-        # Remove trace that causes immediate refresh on every keystroke
-        # self.search_var.trace('w', lambda *args: self.refresh_processes())
-        self.group_processes = True
-        self.selected_process = None
-        self.selected_app_process = None
-        self.expanded_processes = set()  # Track which processes are expanded
-        self.process_data_map = {}  # Map tree items to process data
-        
-        if not check_psutil():
-            tk.Label(parent, text="Install psutil: pip install psutil",
-                    font=("Arial", 12), fg="red").pack(pady=20)
-            return
-        
-        self.setup_ui()
-    
-    def setup_ui(self):
-        # Title and Search Frame
-        header_frame = tk.Frame(self.parent, bg="white")
-        header_frame.pack(fill=tk.X, pady=10, padx=10)
-        
-        tk.Label(header_frame, text="Processes", font=("Arial", 16, "bold"),
-                bg="white").pack(side=tk.LEFT)
-        
-        # Search box
-        search_frame = tk.Frame(header_frame, bg="white")
-        search_frame.pack(side=tk.RIGHT)
-        
-        tk.Label(search_frame, text="Search:", font=("Arial", 10),
-                bg="white").pack(side=tk.LEFT, padx=(0, 5))
-        
-        search_entry = tk.Entry(search_frame, textvariable=self.search_var,
-                               font=("Arial", 10), width=30)
-        search_entry.pack(side=tk.LEFT)
-        
-        # Bind Enter key to search instead of real-time search
-        search_entry.bind("<Return>", lambda e: self.refresh_processes())
-        
-        tk.Button(search_frame, text="Search", command=self.refresh_processes,
-                 bg="#0078d4", fg="white", padx=5).pack(side=tk.LEFT, padx=2)
-        tk.Button(search_frame, text="Clear", command=self.clear_search,
-                 bg="#999", fg="white", padx=5).pack(side=tk.LEFT, padx=2)
-        
-        # Toolbar
-        toolbar = tk.Frame(self.parent, bg="white")
-        toolbar.pack(fill=tk.X, padx=10, pady=5)
-        
-        tk.Button(toolbar, text="Refresh", command=self.refresh_processes,
-                 bg="#0078d4", fg="white", padx=10).pack(side=tk.LEFT, padx=2)
-        tk.Button(toolbar, text="Kill Process", command=self.kill_selected_process,
-                 bg="#d13438", fg="white", padx=10).pack(side=tk.LEFT, padx=2)
-        tk.Button(toolbar, text="Suspend", command=self.suspend_selected_process,
-                 bg="#ff8c00", fg="white", padx=10).pack(side=tk.LEFT, padx=2)
-        
-        # Group toggle
-        self.group_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(toolbar, text="Group by Name", variable=self.group_var,
-                      command=self.toggle_grouping, bg="white",
-                      font=("Arial", 10)).pack(side=tk.LEFT, padx=10)
-        
-        # --- App Processes Table ---
-        app_label_frame = tk.Frame(self.parent, bg="white")
-        app_label_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
-        
-        tk.Label(app_label_frame, text="Active Application Processes", 
-                 font=("Arial", 12, "bold"), bg="white", fg="#FF6B00").pack(anchor="w")
-        tk.Label(app_label_frame, text="Right-click to expand/collapse grouped processes", 
-                 font=("Arial", 9), bg="white", fg="#666").pack(anchor="w")
-        
-        app_table_frame = tk.Frame(self.parent, bg="white", relief=tk.RIDGE, borderwidth=2)
-        app_table_frame.pack(fill=tk.X, padx=10, pady=(5, 10))
-        
-        app_vsb = tk.Scrollbar(app_table_frame, orient="vertical")
-        app_hsb = tk.Scrollbar(app_table_frame, orient="horizontal")
-        
-        app_columns = ("Count", "Name", "User", "CPU %", "Memory %", "Network (KB/s)", "Status")
-        self.app_process_tree = ttk.Treeview(
-            app_table_frame, 
-            columns=app_columns, 
-            show="tree headings",
-            yscrollcommand=app_vsb.set, 
-            xscrollcommand=app_hsb.set, 
-            height=8
-        )
-        app_vsb.config(command=self.app_process_tree.yview)
-        app_hsb.config(command=self.app_process_tree.xview)
-        
-        for col in app_columns:
-            self.app_process_tree.heading(col, text=col)
-            if col == "Name":
-                self.app_process_tree.column(col, width=200)
-            elif col == "Network (KB/s)":
-                self.app_process_tree.column(col, width=120)
-            elif col == "Count":
-                self.app_process_tree.column(col, width=60)
-            else:
-                self.app_process_tree.column(col, width=100)
-        
-        self.app_process_tree.column("#0", width=30)
-        
-        self.app_process_tree.tag_configure('app_highlight', background='#FFE5CC')
-        self.app_process_tree.tag_configure('instance', background='#FFF5E6')
-        
-        # Right-click and single-click to expand/collapse
-        self.app_context_menu = tk.Menu(self.app_process_tree, tearoff=0)
-        self.app_process_tree.bind("<Button-3>", self.show_app_context_menu)
-        self.app_process_tree.bind("<Button-1>", self.on_tree_click)
-        
-        self.app_process_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=2, pady=2)
-        app_vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        app_hsb.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        # All Processes Label
-        all_label_frame = tk.Frame(self.parent, bg="white")
-        all_label_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
-        
-        tk.Label(all_label_frame, text="All System Processes", 
-                 font=("Arial", 12, "bold"), bg="white").pack(anchor="w")
-        
-        # Process table (Main)
-        table_frame = tk.Frame(self.parent, bg="white")
-        table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        vsb = tk.Scrollbar(table_frame, orient="vertical")
-        hsb = tk.Scrollbar(table_frame, orient="horizontal")
-        
-        columns = ("Count", "Name", "User", "CPU %", "Memory %", "Network (KB/s)", "Status")
-        self.process_tree = ttk.Treeview(
-            table_frame, 
-            columns=columns, 
-            show="tree headings",
-            yscrollcommand=vsb.set, 
-            xscrollcommand=hsb.set
-        )
-        
-        vsb.config(command=self.process_tree.yview)
-        hsb.config(command=self.process_tree.xview)
-        
-        for col in columns:
-            self.process_tree.heading(col, text=col)
-            if col == "Name":
-                self.process_tree.column(col, width=200)
-            elif col == "Network (KB/s)":
-                self.process_tree.column(col, width=120)
-            elif col == "Count":
-                self.process_tree.column(col, width=60)
-            else:
-                self.process_tree.column(col, width=100)
-        
-        self.process_tree.column("#0", width=30)
-        
-        self.process_tree.tag_configure('even', background='#f2f2f2')
-        self.process_tree.tag_configure('odd', background='#ffffff')
-        self.process_tree.tag_configure('active', background="#aefa0a")
-        self.process_tree.tag_configure('instance', background='#E8E8E8')
-        
-        # Right-click and single-click
-        self.context_menu = tk.Menu(self.process_tree, tearoff=0)
-        self.process_tree.bind("<Button-3>", self.show_context_menu)
-        self.process_tree.bind("<Button-1>", self.on_tree_click)
-        
-        self.process_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        hsb.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        self.refresh_processes()
-    
-    def toggle_grouping(self):
-        """Toggle process grouping"""
-        self.group_processes = self.group_var.get()
-        self.expanded_processes.clear()
-        self.refresh_processes()
-    
-    def on_tree_click(self, event):
-        """Handle single click to toggle expansion"""
-        tree = event.widget
-        item = tree.identify_row(event.y)
-        if not item:
-            return
-        
-        # Select the clicked item
-        tree.selection_set(item)
-        
-        # Only toggle if it's a parent item
-        if item in self.process_data_map:
-            data = self.process_data_map[item]
-            if data.get('is_parent') and data.get('count', 1) > 1:
-                name = data.get('name')
-                # Toggle expansion state
-                if name in self.expanded_processes:
-                    self.expanded_processes.remove(name)
-                else:
-                    self.expanded_processes.add(name)
-                # Refresh to show/hide children
-                self.refresh_processes()
-    
-    def toggle_expansion(self, event):
-        """Toggle expansion of grouped process (no longer used, kept for compatibility)"""
-        pass
-    
-    def show_context_menu(self, event):
-        """Show context menu on right-click and expand if grouped"""
-        item = self.process_tree.identify_row(event.y)
-        if not item:
-            return
-            
-        self.process_tree.selection_set(item)
-        
-        # Check if this is a parent or child item
-        if item in self.process_data_map:
-            data = self.process_data_map[item]
-            
-            if data.get('is_parent'):
-                # Parent item
-                name = data.get('name')
-                count = data.get('count', 1)
-                
-                # Auto-expand if it's a grouped process and not already expanded
-                if count > 1 and name not in self.expanded_processes:
-                    self.expanded_processes.add(name)
-                    self.refresh_processes()
-                    return  # Don't show menu, just expand
-                
-                # Build context menu
-                self.context_menu.delete(0, tk.END)
-                
-                if count > 1:
-                    self.context_menu.add_command(label="Collapse", 
-                                                command=lambda: self.collapse_process(name))
-                    self.context_menu.add_separator()
-                    self.context_menu.add_command(label=f"Kill All {count} Instances", 
-                                                command=self.kill_selected_process)
-                    self.context_menu.add_command(label=f"Suspend All {count} Instances", 
-                                                command=self.suspend_selected_process)
-                else:
-                    self.context_menu.add_command(label="Kill Process", 
-                                                command=self.kill_selected_process)
-                    self.context_menu.add_command(label="Suspend Process", 
-                                                command=self.suspend_selected_process)
-            else:
-                # Child item (individual process)
-                self.context_menu.delete(0, tk.END)
-                self.context_menu.add_command(label="Kill This Process", 
-                                            command=self.kill_selected_process)
-                self.context_menu.add_command(label="Suspend This Process", 
-                                            command=self.suspend_selected_process)
-            
-            self.context_menu.post(event.x_root, event.y_root)
-    
-    def show_app_context_menu(self, event):
-        """Show context menu on right-click for app table and expand if grouped"""
-        item = self.app_process_tree.identify_row(event.y)
-        if not item:
-            return
-            
-        self.app_process_tree.selection_set(item)
-        
-        if item in self.process_data_map:
-            data = self.process_data_map[item]
-            
-            if data.get('is_parent'):
-                name = data.get('name')
-                count = data.get('count', 1)
-                
-                # Auto-expand if it's a grouped process and not already expanded
-                if count > 1 and name not in self.expanded_processes:
-                    self.expanded_processes.add(name)
-                    self.refresh_processes()
-                    return  # Don't show menu, just expand
-                
-                # Build context menu
-                self.app_context_menu.delete(0, tk.END)
-                
-                if count > 1:
-                    self.app_context_menu.add_command(label="Collapse", 
-                                                    command=lambda: self.collapse_process(name))
-                    self.app_context_menu.add_separator()
-                    self.app_context_menu.add_command(label=f"Kill All {count} Instances", 
-                                                    command=self.kill_selected_process)
-                    self.app_context_menu.add_command(label=f"Suspend All {count} Instances", 
-                                                    command=self.suspend_selected_process)
-            else:
-                # Child item
-                self.app_context_menu.delete(0, tk.END)
-                self.app_context_menu.add_command(label="Kill This Process", 
-                                                command=self.kill_selected_process)
-                self.app_context_menu.add_command(label="Suspend This Process", 
-                                                command=self.suspend_selected_process)
-            
-            self.app_context_menu.post(event.x_root, event.y_root)
-    
-    def expand_process(self, name):
-        """Expand a grouped process"""
-        self.expanded_processes.add(name)
-        self.refresh_processes()
-    
-    def collapse_process(self, name):
-        """Collapse a grouped process"""
-        self.expanded_processes.discard(name)
-        self.refresh_processes()
-    
-    def show_instances(self):
-        """Show all instances of a grouped process with action buttons"""
-        # Determine which tree was used
-        if hasattr(self, 'selected_process') and self.selected_process:
-            selected = self.selected_process
-        elif hasattr(self, 'selected_app_process') and self.selected_app_process:
-            selected = self.selected_app_process
+        self.current_user = getpass.getuser()
+        self._stop = threading.Event()
+        self._process_cache = {}
+        self._build_ui()
+        self._start_background_updates()
+
+    # --------------------------------------------------
+    # BUILD INTERFACE
+    # --------------------------------------------------
+    def _build_ui(self):
+        self.pack(fill="both", expand=True)
+        padx = 20
+        pady = 12
+
+        # Heading
+        heading = ctk.CTkLabel(self, text="PROCESSES", 
+                               font=ctk.CTkFont(size=26, weight="bold"), 
+                               text_color=TEXT_PRIMARY)
+        heading.pack(anchor="w", padx=padx, pady=(pady, 0))
+
+        # Top buttons
+        top = ctk.CTkFrame(self, fg_color="transparent")
+        top.pack(fill="x", padx=padx, pady=(8, 16))
+
+        self.btn_refresh = ctk.CTkButton(top, text="Refresh", width=120,fg_color="#124c0c", command=self.refresh_now)
+        self.btn_kill = ctk.CTkButton(top, text="Kill Selected", width=140, fg_color="#e66b6b")
+        self.btn_suspend = ctk.CTkButton(top, text="Suspend", width=120, fg_color="#ff9b4a")
+
+        self.btn_refresh.grid(row=0, column=0, padx=(0,12))
+        self.btn_kill.grid(row=0, column=1, padx=(0,12))
+        self.btn_suspend.grid(row=0, column=2)
+
+        # Content area
+        content = ctk.CTkFrame(self, fg_color="transparent")
+        content.pack(fill="both", expand=True, padx=padx, pady=(0, pady))
+
+        content.grid_rowconfigure(0, weight=1)
+        content.grid_rowconfigure(1, weight=1)
+        content.grid_columnconfigure(0, weight=1)
+
+        # Application Processes Card
+        self.app_card = self._create_card(content, "Application Processes")
+        self.app_card.grid(row=0, column=0, sticky="nsew", pady=(0, 12))
+
+        # System Processes Card
+        self.sys_card = self._create_card(content, "System Processes")
+        self.sys_card.grid(row=1, column=0, sticky="nsew", pady=(12, 0))
+
+    # --------------------------------------------------
+    # CREATE CARD
+    # --------------------------------------------------
+    def _create_card(self, parent, title):
+        outer = ctk.CTkFrame(parent, fg_color=CARD_BG, corner_radius=CORNER)
+
+        # Neon accent strip
+        neon = ctk.CTkFrame(outer, width=6, fg_color=NEON_LIME, corner_radius=6)
+        neon.place(relx=0, rely=0, relheight=1)
+
+        inner = ctk.CTkFrame(outer, fg_color=INNER_BG, corner_radius=CORNER)
+        inner.pack(fill="both", expand=True, padx=(12,14), pady=12)
+
+        lbl = ctk.CTkLabel(inner, text=title, 
+                           font=ctk.CTkFont(size=16, weight="bold"), 
+                           text_color=TEXT_PRIMARY)
+        lbl.pack(anchor="w", padx=12, pady=(0, 10))
+
+        # Table frame
+        table_frame = ctk.CTkFrame(inner, fg_color="transparent")
+        table_frame.pack(fill="both", expand=True, padx=12, pady=4)
+
+        # Treeview
+        columns = ("pid", "name", "cpu", "mem")
+        tree = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="extended")
+
+        tree.heading("pid", text="PID")
+        tree.heading("name", text="Name")
+        tree.heading("cpu", text="CPU%")
+        tree.heading("mem", text="RAM%")
+
+        tree.column("pid", width=100, anchor="w")
+        tree.column("name", anchor="w")
+        tree.column("cpu", width=90, anchor="center")
+        tree.column("mem", width=90, anchor="center")
+
+        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
+        hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        tree.pack(side="top", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+        hsb.pack(side="bottom", fill="x")
+
+        # Style
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure("Treeview",
+                        background=ROW_ODD,
+                        foreground=TEXT_PRIMARY,
+                        fieldbackground=ROW_ODD,
+                        rowheight=42,
+                        font=("Segoe UI", 14))
+
+        style.configure("Treeview.Heading",
+                        font=("Segoe UI", 16, "bold"),
+                        background=INNER_BG,
+                        # background=GLOW,
+                        foreground=TEXT_PRIMARY)
+
+        tree.tag_configure("odd", background=ROW_ODD)
+        tree.tag_configure("even", background=ROW_EVEN)
+
+        # Store tree based on title
+        if "Application" in title:
+            self.apps_tree = tree
         else:
-            return
-        
-        count = selected['count']
-        name = selected['name']
-        
-        # Get all processes for this name
-        all_processes = self.manager.list_processes()
-        instances = [p for p in all_processes if p.get('name') == name]
-        
-        if not instances:
-            messagebox.showinfo("No Instances", f"No instances of '{name}' found.")
-            return
-        
-        # Create popup window
-        popup = tk.Toplevel(self.parent)
-        popup.title(f"Instances of {name}")
-        popup.geometry("900x500")
-        popup.configure(bg="white")
-        
-        # Header
-        header = tk.Frame(popup, bg="white")
-        header.pack(fill=tk.X, padx=10, pady=10)
-        
-        tk.Label(header, text=f"All Instances of '{name}'",
-                font=("Arial", 14, "bold"), bg="white").pack(side=tk.LEFT)
-        
-        tk.Label(header, text=f"Total: {len(instances)} process(es)",
-                font=("Arial", 10), bg="white", fg="#666").pack(side=tk.LEFT, padx=10)
-        
-        # Create table for instances
-        frame = tk.Frame(popup, bg="white")
-        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        
-        vsb = tk.Scrollbar(frame, orient="vertical")
-        columns = ("PID", "User", "CPU %", "Memory %", "Network (KB/s)", "Status")
-        tree = ttk.Treeview(frame, columns=columns, show="headings",
-                           yscrollcommand=vsb.set)
-        vsb.config(command=tree.yview)
-        
-        for col in columns:
-            tree.heading(col, text=col)
-            tree.column(col, width=120)
-        
-        # Insert instances with alternating colors
-        for idx, proc in enumerate(instances):
-            tags = ('even',) if idx % 2 == 0 else ('odd',)
-            tree.insert("", "end", values=(
-                proc.get('pid', 'N/A'),
-                proc.get('username', 'N/A'),
-                f"{proc.get('cpu_percent', 0):.1f}",
-                f"{proc.get('memory_percent', 0):.1f}",
-                f"{proc.get('network_kbps', 0):.2f}",
-                proc.get('status', 'N/A')
-            ), tags=tags)
-        
-        tree.tag_configure('even', background='#f2f2f2')
-        tree.tag_configure('odd', background='#ffffff')
-        
-        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Action buttons
-        btn_frame = tk.Frame(popup, bg="white")
-        btn_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        def kill_selected_instance():
-            selected = tree.selection()
-            if not selected:
-                messagebox.showwarning("No Selection", "Please select a process instance")
-                return
-            
-            pid = tree.item(selected[0])['values'][0]
-            if messagebox.askyesno("Confirm", f"Kill process {pid}?"):
-                success, msg = self.manager.kill_process(pid)
-                if success:
-                    messagebox.showinfo("Success", msg)
-                    popup.destroy()
-                    self.refresh_processes()
-                else:
-                    messagebox.showerror("Error", msg)
-        
-        def suspend_selected_instance():
-            selected = tree.selection()
-            if not selected:
-                messagebox.showwarning("No Selection", "Please select a process instance")
-                return
-            
-            pid = tree.item(selected[0])['values'][0]
-            success, msg = self.manager.suspend_process(pid)
-            if success:
-                messagebox.showinfo("Success", msg)
-                popup.destroy()
-                self.refresh_processes()
-            else:
-                messagebox.showerror("Error", msg)
-        
-        def resume_selected_instance():
-            selected = tree.selection()
-            if not selected:
-                messagebox.showwarning("No Selection", "Please select a process instance")
-                return
-            
-            pid = tree.item(selected[0])['values'][0]
-            success, msg = self.manager.resume_process(pid)
-            if success:
-                messagebox.showinfo("Success", msg)
-                popup.destroy()
-                self.refresh_processes()
-            else:
-                messagebox.showerror("Error", msg)
-        
-        tk.Button(btn_frame, text="Kill Selected", command=kill_selected_instance,
-                 bg="#d13438", fg="white", padx=15, pady=5).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Suspend Selected", command=suspend_selected_instance,
-                 bg="#ff8c00", fg="white", padx=15, pady=5).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Resume Selected", command=resume_selected_instance,
-                 bg="#28a745", fg="white", padx=15, pady=5).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Close", command=popup.destroy,
-                 bg="#999", fg="white", padx=20, pady=5).pack(side=tk.RIGHT, padx=5)
-    
-    def kill_all_instances(self):
-        """Kill all instances of a grouped process"""
-        selected = self.selected_process or self.selected_app_process
-        if not selected:
-            return
-        
-        name = selected['name']
-        count = selected['count']
-        
-        if not messagebox.askyesno("Confirm", 
-            f"Are you sure you want to kill all {count} instances of '{name}'?"):
-            return
-        
-        all_processes = self.manager.list_processes()
-        instances = [p for p in all_processes if p.get('name') == name]
-        
-        success_count = 0
-        failed_count = 0
-        
-        for proc in instances:
-            pid = proc.get('pid')
-            success, msg = self.manager.kill_process(pid)
-            if success:
-                success_count += 1
-            else:
-                failed_count += 1
-        
-        messagebox.showinfo("Result", 
-            f"Killed {success_count} process(es)\nFailed: {failed_count}")
-        self.refresh_processes()
-    
-    def suspend_all_instances(self):
-        """Suspend all instances of a grouped process"""
-        selected = self.selected_process or self.selected_app_process
-        if not selected:
-            return
-        
-        name = selected['name']
-        count = selected['count']
-        
-        if not messagebox.askyesno("Confirm", 
-            f"Are you sure you want to suspend all {count} instances of '{name}'?"):
-            return
-        
-        all_processes = self.manager.list_processes()
-        instances = [p for p in all_processes if p.get('name') == name]
-        
-        success_count = 0
-        failed_count = 0
-        
-        for proc in instances:
-            pid = proc.get('pid')
-            success, msg = self.manager.suspend_process(pid)
-            if success:
-                success_count += 1
-            else:
-                failed_count += 1
-        
-        messagebox.showinfo("Result", 
-            f"Suspended {success_count} process(es)\nFailed: {failed_count}")
-        self.refresh_processes()
-    
-    def clear_search(self):
-        """Clear search and refresh"""
-        self.search_var.set("")
-        self.refresh_processes()
-    
-    def refresh_processes(self):
-        """Refresh the process list"""
-        if not hasattr(self, 'process_tree'):
-            return
+            self.system_tree = tree
 
-        # Save scroll positions and selections
-        try:
-            yview_position = self.process_tree.yview()[0]
-            app_yview_position = self.app_process_tree.yview()[0]
-            
-            main_selected = self.process_tree.selection()
-            main_selected_name = None
-            if main_selected and main_selected[0] in self.process_data_map:
-                main_selected_name = self.process_data_map[main_selected[0]].get('name')
-            
-            app_selected = self.app_process_tree.selection()
-            app_selected_name = None
-            if app_selected and app_selected[0] in self.process_data_map:
-                app_selected_name = self.process_data_map[app_selected[0]].get('name')
-        except:
-            yview_position = 0
-            app_yview_position = 0
-            main_selected_name = None
-            app_selected_name = None
+        return outer
 
-        # IMPORTANT: DON'T clear expanded_processes here
-        # This preserves the expansion state across refreshes
-        # expanded_processes is only modified by user clicks
+    # --------------------------------------------------
+    # BACKGROUND REFRESH LOOP
+    # --------------------------------------------------
+    def _start_background_updates(self):
+        threading.Thread(target=self._updater_loop, daemon=True).start()
 
-        # Clear tables and data map
-        for item in self.process_tree.get_children():
-            self.process_tree.delete(item)
-        for item in self.app_process_tree.get_children():
-            self.app_process_tree.delete(item)
-        self.process_data_map.clear()
-
-        try:
-            all_processes = self.manager.list_processes()
-            
-            # Apply search filter
-            search_query = self.search_var.get().strip()
-            if search_query:
-                all_processes = self.manager.search_processes(all_processes, search_query)
-            
-            # Group processes if enabled
-            if self.group_processes:
-                processes = self.manager.group_processes(all_processes)
-            else:
-                processes = [dict(p, count=1, processes=[p]) for p in all_processes]
-
-            # Populate App Processes Table
-            app_processes = [p for p in processes if self.is_app_process(p)]
-            for proc in app_processes:
-                self._insert_process(self.app_process_tree, proc, app_selected_name, is_app_table=True)
-
-            # Populate All Processes Table
-            for idx, proc in enumerate(processes):
-                self._insert_process(self.process_tree, proc, main_selected_name, idx=idx)
-
-            # Restore scroll positions
-            self.process_tree.update_idletasks()
-            self.process_tree.yview_moveto(yview_position)
-            self.app_process_tree.update_idletasks()
-            self.app_process_tree.yview_moveto(app_yview_position)
-
-        except Exception as e:
-            print(f"Error refreshing processes: {e}")
-            # Don't show error dialog during auto-refresh
-    
-    def _insert_process(self, tree, proc, selected_name, idx=0, is_app_table=False):
-        """Helper method to insert process with expansion support"""
-        name = proc.get('name', 'N/A')
-        count = proc.get('count', 1)
-        
-        # Determine tags
-        if is_app_table:
-            tags = ['app_highlight']
-        else:
-            if proc.get('cpu_percent', 0) > 0 or proc.get('memory_percent', 0) > 0:
-                tags = ['active']
-            else:
-                tags = ['even' if idx % 2 == 0 else 'odd']
-        
-        # Insert parent item (no icon)
-        values = (
-            count,
-            name,
-            proc.get('username', 'N/A'),
-            f"{proc.get('cpu_percent', 0):.1f}",
-            f"{proc.get('memory_percent', 0):.1f}",
-            f"{proc.get('network_kbps', 0):.2f}",
-            proc.get('status', 'N/A')
-        )
-        
-        parent_id = tree.insert("", "end", text="", values=values, tags=tags)
-        
-        # Store data mapping
-        self.process_data_map[parent_id] = {
-            'is_parent': True,
-            'name': name,
-            'count': count,
-            'processes': proc.get('processes', [proc]),
-            'pid': proc.get('pid')
-        }
-        
-        # Restore selection
-        if selected_name and name == selected_name:
-            tree.selection_set(parent_id)
-            tree.see(parent_id)
-        
-        # Insert children if expanded
-        if count > 1 and name in self.expanded_processes:
-            for child_proc in proc.get('processes', []):
-                child_values = (
-                    "",
-                    f"  └─ PID {child_proc.get('pid')}",
-                    child_proc.get('username', 'N/A'),
-                    f"{child_proc.get('cpu_percent', 0):.1f}",
-                    f"{child_proc.get('memory_percent', 0):.1f}",
-                    f"{child_proc.get('network_kbps', 0):.2f}",
-                    child_proc.get('status', 'N/A')
-                )
-                
-                child_id = tree.insert(parent_id, "end", text="", 
-                                      values=child_values, tags=['instance'])
-                
-                self.process_data_map[child_id] = {
-                    'is_parent': False,
-                    'name': name,
-                    'pid': child_proc.get('pid'),
-                    'count': 1
-                }
-    
-    def is_app_process(self, proc):
-        """Determine if a process is an application (not system process)"""
-        name = proc.get('name', '').lower()
-        
-        # Common system processes to exclude
-        system_processes = [
-            'system', 'idle', 'init', 'systemd', 'kthreadd', 'ksoftirqd',
-            'migration', 'watchdog', 'cpuhp', 'kdevtmpfs', 'netns',
-            'kworker', 'rcu_', 'mm_', 'writeback', 'kblockd', 'kintegrityd',
-            'kswapd', 'ksmd', 'khugepaged', 'crypto', 'kthrotld',
-            'svchost', 'services', 'lsass', 'csrss', 'smss', 'wininit',
-            'dwm', 'conhost', 'dllhost', 'taskhost', 'explorer.exe'
-        ]
-        
-        # Check if it's a system process
-        for sys_proc in system_processes:
-            if sys_proc in name:
-                return False
-        
-        # Consider it an app if it's using resources
-        cpu = proc.get('cpu_percent', 0)
-        mem = proc.get('memory_percent', 0)
-        net = proc.get('network_kbps', 0)
-        
-        return (cpu > 0.1 or mem > 0.5 or net > 1) and len(name) > 2
-    
-    def kill_selected_process(self):
-        """Kill the selected process or all instances if grouped"""
-        # Try main tree first, then app tree
-        if self.process_tree.selection():
-            tree = self.process_tree
-            selected = tree.selection()[0]
-        elif self.app_process_tree.selection():
-            tree = self.app_process_tree
-            selected = tree.selection()[0]
-        else:
-            messagebox.showwarning("Warning", "Please select a process")
-            return
-        
-        if selected not in self.process_data_map:
-            return
-        
-        data = self.process_data_map[selected]
-        
-        if data.get('is_parent'):
-            # Kill all instances
-            name = data.get('name')
-            count = data.get('count', 1)
-            processes = data.get('processes', [])
-            
-            if count > 1:
-                if not messagebox.askyesno("Confirm", 
-                    f"Kill all {count} instances of '{name}'?"):
-                    return
-                
-                success_count = 0
-                failed_count = 0
-                
-                for proc in processes:
-                    pid = proc.get('pid')
-                    success, msg = self.manager.kill_process(pid)
-                    if success:
-                        success_count += 1
-                    else:
-                        failed_count += 1
-                
-                messagebox.showinfo("Result", 
-                    f"Killed {success_count} process(es)\nFailed: {failed_count}")
-            else:
-                # Single process
-                pid = data.get('pid')
-                if messagebox.askyesno("Confirm", f"Kill process {pid}?"):
-                    success, msg = self.manager.kill_process(pid)
-                    if success:
-                        messagebox.showinfo("Success", msg)
-                    else:
-                        messagebox.showerror("Error", msg)
-        else:
-            # Kill single child process
-            pid = data.get('pid')
-            if messagebox.askyesno("Confirm", f"Kill process {pid}?"):
-                success, msg = self.manager.kill_process(pid)
-                if success:
-                    messagebox.showinfo("Success", msg)
-                else:
-                    messagebox.showerror("Error", msg)
-        
-        self.refresh_processes()
-    
-    def suspend_selected_process(self):
-        """Suspend the selected process or all instances if grouped"""
-        if self.process_tree.selection():
-            tree = self.process_tree
-            selected = tree.selection()[0]
-        elif self.app_process_tree.selection():
-            tree = self.app_process_tree
-            selected = tree.selection()[0]
-        else:
-            messagebox.showwarning("Warning", "Please select a process")
-            return
-        
-        if selected not in self.process_data_map:
-            return
-        
-        data = self.process_data_map[selected]
-        
-        if data.get('is_parent'):
-            name = data.get('name')
-            count = data.get('count', 1)
-            processes = data.get('processes', [])
-            
-            if count > 1:
-                if not messagebox.askyesno("Confirm", 
-                    f"Suspend all {count} instances of '{name}'?"):
-                    return
-                
-                success_count = 0
-                failed_count = 0
-                
-                for proc in processes:
-                    pid = proc.get('pid')
-                    success, msg = self.manager.suspend_process(pid)
-                    if success:
-                        success_count += 1
-                    else:
-                        failed_count += 1
-                
-                messagebox.showinfo("Result", 
-                    f"Suspended {success_count} process(es)\nFailed: {failed_count}")
-            else:
-                pid = data.get('pid')
-                success, msg = self.manager.suspend_process(pid)
-                if success:
-                    messagebox.showinfo("Success", msg)
-                else:
-                    messagebox.showerror("Error", msg)
-        else:
-            pid = data.get('pid')
-            success, msg = self.manager.suspend_process(pid)
-            if success:
-                messagebox.showinfo("Success", msg)
-            else:
-                messagebox.showerror("Error", msg)
-        
-        self.refresh_processes()
-    
-    def start_updates(self):
-        """Start auto-refresh using tkinter's after() method"""
-        self.update_running = True
-        self._schedule_update()
-    
-    def _schedule_update(self):
-        """Schedule the next update"""
-        if self.update_running:
+    def _updater_loop(self):
+        while not self._stop.is_set():
             try:
-                self.refresh_processes()
+                procs = list(psutil.process_iter(attrs=["pid","name","username","cpu_percent","memory_percent"]))
+
+                for p in procs:
+                    info = p.info
+                    pid = info.get("pid")
+                    try:
+                        cpu = p.cpu_percent(interval=None)
+                    except:
+                        cpu = info.get("cpu_percent", 0.0)
+
+                    mem = info.get("memory_percent", 0.0)
+
+                    self._process_cache[pid] = {
+                        "pid": pid,
+                        "name": info.get("name") or "",
+                        "user": info.get("username") or "",
+                        "cpu": cpu,
+                        "mem": mem
+                    }
+
+                self.parent.after(0, self._update_ui)
+
             except:
                 pass
-            # Schedule next update after 1 second
-            self.update_job = self.parent.after(1000, self._schedule_update)
-    
-    def stop_updates(self):
-        """Stop auto-refresh"""
-        self.update_running = False
-        if self.update_job:
+
+            time.sleep(REFRESH_INTERVAL)
+
+    # --------------------------------------------------
+    # UI POPULATION
+    # --------------------------------------------------
+    def _update_ui(self):
+        apps = []
+        system = []
+
+        for pid, info in self._process_cache.items():
+            user = (info.get("user") or "").lower()
+
+            if user in ("system","nt authority\\system","local service","network service","") or pid == 0:
+                system.append(info)
+            else:
+                if self.current_user.lower() in user:
+                    apps.append(info)
+                else:
+                    system.append(info)
+
+        apps = sorted(apps, key=lambda x: x["name"].lower() if x["name"] else "")
+        system = sorted(system, key=lambda x: x["pid"])
+
+        self._fill_tree(self.apps_tree, apps)
+        self._fill_tree(self.system_tree, system)
+
+    def _fill_tree(self, tree, items):
+        tree.delete(*tree.get_children())
+        for i, it in enumerate(items):
+            tag = "even" if i % 2 == 0 else "odd"
+            tree.insert("", "end",
+                        values=(it["pid"], it["name"], fmt(it["cpu"],1), fmt(it["mem"],1)),
+                        tags=(tag,))
+
+    # --------------------------------------------------
+    # BUTTON ACTIONS
+    # --------------------------------------------------
+    def refresh_now(self):
+        self._update_ui()
+
+    def _get_selected_pids(self):
+        pids = []
+        for tree in (self.apps_tree, self.system_tree):
+            for sel in tree.selection():
+                try:
+                    pids.append(int(sel))
+                except:
+                    pass
+        return pids
+
+    def _kill_selected(self):
+        pids = self._get_selected_pids()
+        if not pids:
+            return
+        for pid in pids:
             try:
-                self.parent.after_cancel(self.update_job)
-            except:
-                pass
-            self.update_job = None
+                psutil.Process(pid).kill()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to kill PID {pid}\n{e}")
+
+    def _suspend_selected(self):
+        pids = self._get_selected_pids()
+        for pid in pids:
+            try:
+                psutil.Process(pid).suspend()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to suspend PID {pid}\n{e}")
+
+    def destroy(self):
+        self._stop.set()
+        super().destroy()
