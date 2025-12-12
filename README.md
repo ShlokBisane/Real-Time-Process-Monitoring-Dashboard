@@ -1,145 +1,175 @@
-🌌 System Monitoring Dashboard
-A Modern, Real-Time Performance & Process Monitoring Suite for Windows
-<p align="center"> <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-blue?style=for-the-badge"> <img src="https://img.shields.io/badge/GUI-CustomTkinter-orange?style=for-the-badge"> <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge"> <img src="https://img.shields.io/badge/Status-Active%20Development-purple?style=for-the-badge"> </p> <p align="center"> <img src="https://img.shields.io/github/stars/yourusername/yourrepo?style=social"> </p>
-✨ Overview
+🌐 Real_Time_System_Monitoring_Dashboard
 
-The System Monitoring Dashboard is a sleek, real-time monitoring application with a premium UI inspired by modern OS dashboards.
-Crafted using CustomTkinter, Matplotlib, and Psutil, it visualizes your entire system in an elegant dark theme with vibrant accents.
+A real-time monitoring dashboard designed to track and display key system health indicators with dynamic UI components.
 
-It tracks:
-✔ CPU usage
-✔ RAM usage
-✔ Disk usage
-✔ Network upload/download
-✔ GPU load (if available)
-✔ Running Processes (App + System)
-✔ Startup Applications (from Windows Registry)
+📊 Overview
 
-All wrapped in a smooth, animated, gradient-enhanced, real-time dashboard.
+The Real-Time System Monitoring Dashboard is a modular Python-based application designed to visualize critical system metrics such as CPU usage, memory consumption, disk activity, and process health.
+With a clean UI ↔ backend separation, the dashboard updates dynamically and provides a responsive monitoring experience.
 
-🚀 Features
-🖥️ Performance Monitoring
+🧭 Table of Contents
 
-Real-time graphs updating every 250ms
+✨ Features
 
-Gradient-filled plots for CPU, GPU, Memory, Disk, and Network
+📂 Project Structure
 
-Dedicated color theme per graph
+⚙️ Installation
 
-Mini metric cards with live percentage bars
+🚀 Usage
 
-Network I/O graphs with download & upload lines
+🧩 Modules Breakdown
 
-<p align="center"> <img src="https://img.icons8.com/fluency/48/dashboard.png"/> </p>
-⚙️ Process Manager
-<p align="center"> <img src="https://img.icons8.com/fluency/48/task-manager.png"/> </p>
+🔧 Configuration
 
-Divided into Application and System processes
+📘 Documentation
 
-Fast-loading tables with alternating row colors
+🧪 Examples
 
-Kill or suspend processes directly
+🐞 Troubleshooting
 
-Smooth UI matching performance tab theme
+👥 Contributors
 
-Auto-refresh every 1.5 seconds
+📄 License
 
-🟢 Startup Applications Manager
-<p align="center"> <img src="https://img.icons8.com/emoji/48/rocket-emoj.png"/> </p>
+✨ Features
 
-Reads Windows' startup registry keys
+⚡ Real-time performance monitoring
 
-Beautiful full-screen table for:
-✓ Name
-✓ Command path
-✓ Registry location
-✓ Enabled state
+📈 Dynamic charts and UI components
 
-“Open Location” button opens executable folder directly
+🧩 Modular architecture (UI, backend, utilities)
 
-🛠️ Tech Stack
-Component	Technology
-UI Framework	CustomTkinter
-System Info	psutil, GPUtil (optional)
-Graphing	Matplotlib
-OS Integration	Windows Registry
-Rendering	Dark Mode + Neon Accents
-📦 Installation
-1️⃣ Clone the Repository
-git clone https://github.com/yourusername/yourrepo.git
-cd yourrepo
+🛠 Extensible modules for settings, profile, home, and startup
 
-2️⃣ Install Dependencies
-pip install customtkinter matplotlib psutil pillow
-pip install gputil   # optional
+🎚 Centralized styling and theme support
 
-3️⃣ Run the Application
+🔌 Clean helper utilities and backend logic separation
+
+🖥 Supports multi-platform system metrics
+
+📂 Project Structure
+mainfolder/
+│
+├── modules/
+│   ├── home/
+│   │   ├── ui.py
+│   │   └── backend.py
+│   ├── profile/
+│   ├── settings/
+│   ├── startup/
+│   └── utils/
+│       └── helpers.py
+│
+├── styles.py
+├── main.py
+└── .venv/
+
+⚙️ Installation
+1. Clone the repository
+git clone https://github.com/<your-repo>/Real_Time_System_Monitoring_Dashboard.git
+cd Real_Time_System_Monitoring_Dashboard
+
+2. Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate      # MacOS/Linux
+venv\Scripts\activate         # Windows
+
+3. Install dependencies
+
+If a requirements file exists:
+
+pip install -r requirements.txt
+
+🚀 Usage
+
+Run the main application:
+
 python main.py
 
-📁 Project Structure
-main.py
-modules/
-│── performance/
-│     └── ui.py
-│── processes/
-│     └── ui.py
-│── startup/
-│     └── ui.py
-│── styles.py
-assets/
-README.md
 
-🎨 UI Theme
+The dashboard will launch and begin displaying real-time metrics.
 
-The UI is powered by:
+🧩 Modules Breakdown
+📁 Home Module
 
-Clean midnight-dark background
+ui.py → Renders main dashboard components
 
-Vibrant accent colors
+backend.py → Handles metric collection for display
 
-Smooth rounded cards with shadows
+📁 Profile Module
 
-High-contrast white typography
+User preferences
 
-The dashboard aesthetic resembles a mix of Task Manager + ROG Armory Crate + macOS Activity Monitor.
+Display settings
 
-🔥 Why This Project Stands Out
+Personalization
 
-Not a basic Tkinter app — looks premium
+📁 Settings
 
-Super fast updates (0.25-sec refresh)
+Application behavior configuration
 
-Modular codebase for easy extension
+UI customization options
 
-Runs without admin privileges (except optional process actions)
+📁 Startup
 
-Looks insane on 1080p / 1440p / 4K monitors
+Preload processes
 
-🧩 Planned Features (Future Updates)
+Initial UI rendering
 
-CPU/GPU temperature graphs
+📁 Utils
 
-GPU VRAM usage (detailed)
+helpers.py → Shared helper functions
 
-Process grouping like Windows Task Manager
+Formatting, conversions, system calls
 
-Search bar for processes
+🔧 Configuration
 
-Import/export custom themes
+Update settings in:
 
-Logging & analytics export
+modules/settings/backend.py
 
-🤝 Contributing
 
-Pull requests are welcome!
-Feel free to fork the project and improve modules, UI, or performance.
+Typical configuration includes:
 
-📜 License
+Refresh rate
 
-This project is under the MIT License — free for personal and commercial use.
+Enabled modules
 
-⭐ Support the Project
+Displayed metrics
 
-If you found this project useful or beautiful, star the repo:
+Theme and layout options
 
-<p align="center"> <img src="https://img.icons8.com/color/48/star--v1.png"/> </p>
+📘 Documentation
+
+You may expand into:
+
+/docs/architecture.md
+
+/docs/modules.md
+
+/docs/api_backend.md
+
+Ask me if you'd like these files generated automatically.
+
+🧪 Examples
+🔹 Basic Example
+from modules.home.backend import SystemMonitor
+
+monitor = SystemMonitor()
+stats = monitor.get_metrics()
+print(stats)
+
+🐞 Troubleshooting
+Issue	Possible Cause	Fix
+Dashboard freezes	High refresh rate	Increase interval in settings
+No metrics displayed	Missing system permissions	Run as administrator
+UI not rendering	Wrong Python version	Use Python 3.11+
+👥 Contributors
+
+You, the project owner
+
+Future contributors welcome!
+
+📄 License
+
+This project is licensed under the MIT License (or specify your preferred license).
