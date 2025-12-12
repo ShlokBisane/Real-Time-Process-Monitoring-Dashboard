@@ -49,8 +49,7 @@ mainfolder/
 ├── main.py
 └── .venv/
 
-yaml
-Copy code
+
 
 ---
 
@@ -61,30 +60,17 @@ Copy code
 git clone https://github.com/<your-repo>/Real_Time_System_Monitoring_Dashboard.git
 cd Real_Time_System_Monitoring_Dashboard
 2. Create a virtual environment
-bash
-Copy code
+
 python -m venv venv
+
 3. Activate the environment
+
 Mac/Linux:
-
-bash
-Copy code
 source venv/bin/activate
+
 Windows:
-
-bash
-Copy code
 venv\Scripts\activate
-4. Install dependencies
-bash
-Copy code
-pip install -r requirements.txt
-Usage
-To run the dashboard:
 
-bash
-Copy code
-python main.py
 Modules Breakdown
 Home Module
 ui.py — UI rendering for the main dashboard
