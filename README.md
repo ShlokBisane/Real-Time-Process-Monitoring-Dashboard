@@ -1,175 +1,133 @@
-🌐 Real_Time_System_Monitoring_Dashboard
-
+# Real_Time_System_Monitoring_Dashboard
 A real-time monitoring dashboard designed to track and display key system health indicators with dynamic UI components.
 
-📊 Overview
+---
 
-The Real-Time System Monitoring Dashboard is a modular Python-based application designed to visualize critical system metrics such as CPU usage, memory consumption, disk activity, and process health.
-With a clean UI ↔ backend separation, the dashboard updates dynamically and provides a responsive monitoring experience.
+## Overview
+The Real-Time System Monitoring Dashboard is a modular Python application that visualizes essential system metrics such as CPU load, memory consumption, disk usage, and other performance indicators. It uses a clean UI–backend separation to deliver fast, dynamic updates in a lightweight dashboard environment.
 
-🧭 Table of Contents
+---
 
-✨ Features
+## Table of Contents
+- Features  
+- Project Structure  
+- Installation  
+- Usage  
+- Modules Breakdown  
+- Configuration  
+- Documentation  
+- Troubleshooting  
+- Contributors  
+- License  
 
-📂 Project Structure
+---
 
-⚙️ Installation
+## Features
+- Real-time system performance monitoring  
+- Dynamic UI components  
+- Modular backend & UI architecture  
+- Extensible modules (home, profile, settings, startup)  
+- Unified theme and style handling  
+- Utility helpers for shared functionality  
 
-🚀 Usage
+---
 
-🧩 Modules Breakdown
-
-🔧 Configuration
-
-📘 Documentation
-
-🧪 Examples
-
-🐞 Troubleshooting
-
-👥 Contributors
-
-📄 License
-
-✨ Features
-
-⚡ Real-time performance monitoring
-
-📈 Dynamic charts and UI components
-
-🧩 Modular architecture (UI, backend, utilities)
-
-🛠 Extensible modules for settings, profile, home, and startup
-
-🎚 Centralized styling and theme support
-
-🔌 Clean helper utilities and backend logic separation
-
-🖥 Supports multi-platform system metrics
-
-📂 Project Structure
+## Project Structure
 mainfolder/
 │
 ├── modules/
-│   ├── home/
-│   │   ├── ui.py
-│   │   └── backend.py
-│   ├── profile/
-│   ├── settings/
-│   ├── startup/
-│   └── utils/
-│       └── helpers.py
+│ ├── home/
+│ │ ├── ui.py
+│ │ └── backend.py
+│ ├── profile/
+│ ├── settings/
+│ ├── startup/
+│ └── utils/
+│ └── helpers.py
 │
 ├── styles.py
 ├── main.py
 └── .venv/
 
-⚙️ Installation
-1. Clone the repository
+yaml
+Copy code
+
+---
+
+## Installation
+
+### 1. Clone the repository
+
 git clone https://github.com/<your-repo>/Real_Time_System_Monitoring_Dashboard.git
 cd Real_Time_System_Monitoring_Dashboard
-
-2. Create and activate a virtual environment
+2. Create a virtual environment
+bash
+Copy code
 python -m venv venv
-source venv/bin/activate      # MacOS/Linux
-venv\Scripts\activate         # Windows
+3. Activate the environment
+Mac/Linux:
 
-3. Install dependencies
+bash
+Copy code
+source venv/bin/activate
+Windows:
 
-If a requirements file exists:
-
+bash
+Copy code
+venv\Scripts\activate
+4. Install dependencies
+bash
+Copy code
 pip install -r requirements.txt
+Usage
+To run the dashboard:
 
-🚀 Usage
-
-Run the main application:
-
+bash
+Copy code
 python main.py
+Modules Breakdown
+Home Module
+ui.py — UI rendering for the main dashboard
 
+backend.py — system metric collection logic
 
-The dashboard will launch and begin displaying real-time metrics.
+Profile Module
+Manages user-specific display and behavior settings
 
-🧩 Modules Breakdown
-📁 Home Module
+Settings Module
+Global application settings and configuration logic
 
-ui.py → Renders main dashboard components
+Startup Module
+Handles initialization routines and UI preloading
 
-backend.py → Handles metric collection for display
+Utils Module
+helpers.py — shared utility functions
 
-📁 Profile Module
+Configuration
+Configuration values such as refresh rate, enabled modules, and UI themes are located in:
 
-User preferences
-
-Display settings
-
-Personalization
-
-📁 Settings
-
-Application behavior configuration
-
-UI customization options
-
-📁 Startup
-
-Preload processes
-
-Initial UI rendering
-
-📁 Utils
-
-helpers.py → Shared helper functions
-
-Formatting, conversions, system calls
-
-🔧 Configuration
-
-Update settings in:
-
+bash
+Copy code
 modules/settings/backend.py
+Documentation
+You may add further documentation inside a /docs folder, including:
 
+Architecture explanation
 
-Typical configuration includes:
+Module-by-module documentation
 
-Refresh rate
+Backend API description
 
-Enabled modules
+If you'd like, I can generate these files automatically.
 
-Displayed metrics
+Troubleshooting
+Issue	Cause	Fix
+Dashboard freezes	Too frequent refresh cycles	Increase the refresh interval
+No metrics appear	Permission restrictions	Run the app with elevated permissions
+UI not loading	Wrong Python version	Use Python 3.11 or higher
 
-Theme and layout options
+Contributors
+Project Owner: Soumik | Shlok | Shukla
 
-📘 Documentation
-
-You may expand into:
-
-/docs/architecture.md
-
-/docs/modules.md
-
-/docs/api_backend.md
-
-Ask me if you'd like these files generated automatically.
-
-🧪 Examples
-🔹 Basic Example
-from modules.home.backend import SystemMonitor
-
-monitor = SystemMonitor()
-stats = monitor.get_metrics()
-print(stats)
-
-🐞 Troubleshooting
-Issue	Possible Cause	Fix
-Dashboard freezes	High refresh rate	Increase interval in settings
-No metrics displayed	Missing system permissions	Run as administrator
-UI not rendering	Wrong Python version	Use Python 3.11+
-👥 Contributors
-
-You, the project owner
-
-Future contributors welcome!
-
-📄 License
-
-This project is licensed under the MIT License (or specify your preferred license).
+License
+This project is released under the MIT License.
