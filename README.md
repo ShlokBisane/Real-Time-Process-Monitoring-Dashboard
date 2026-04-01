@@ -113,7 +113,7 @@ No metrics appear	Permission restrictions	Run the app with elevated permissions
 UI not loading	Wrong Python version	Use Python 3.11 or higher
 
 Contributors
-Project Owner: Soumik | Shlok | Shukla
+Project Owner: Soumik | Shlok Bisane | Devyansh Shukla
 
 License
 This project is released under the MIT License.
